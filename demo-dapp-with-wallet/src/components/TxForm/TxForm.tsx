@@ -1,57 +1,40 @@
-import React, {useCallback, useState} from 'react';
-import ReactJson from 'react-json-view';
-import './style.scss';
-import {SendTransactionRequest, useTonConnectUI, useTonWallet} from "@tonconnect/ui-react";
+import { useTonConnectUI } from '@tonconnect/ui-react';
+import { beginCell, toNano, Address } from '@ton/ton'
 
 // In this example, we are using a predefined smart contract state initialization (`stateInit`)
 // to interact with an "EchoContract". This contract is designed to send the value back to the sender,
 // serving as a testing tool to prevent users from accidentally spending money.
-const defaultTx: SendTransactionRequest = {
-	// The transaction is valid for 10 minutes from now, in unix epoch seconds.
-	validUntil: Math.floor(Date.now() / 1000) + 600,
-	messages: [
 
-		{
-			// The receiver's address.
-			address: 'EQCKWpx7cNMpvmcN5ObM5lLUZHZRFKqYA4xmw9jOry0ZsF9M',
-			// Amount to send in nanoTON. For example, 0.005 TON is 5000000 nanoTON.
-			amount: '5000000',
-			// (optional) State initialization in boc base64 format.
-			stateInit: 'te6cckEBBAEAOgACATQCAQAAART/APSkE/S88sgLAwBI0wHQ0wMBcbCRW+D6QDBwgBDIywVYzxYh+gLLagHPFsmAQPsAlxCarA==',
-			// (optional) Payload in boc base64 format.
-			payload: 'te6ccsEBAQEADAAMABQAAAAASGVsbG8hCaTc/g==',
-		},
+	const body = beginCell()
+	.storeUint(0xf8a7ea5, 32)                 // jetton transfer op code
+	.storeUint(0, 64)                         // query_id:uint64
+	.storeCoins(toNano("0.001"))              // amount:(VarUInteger 16) -  Jetton amount for transfer (decimals = 6 - USDT, 9 - default). Function toNano use decimals = 9 (remember it)
+	.storeAddress(Address.parse("EQCjpFIuTr_a-DKnKZzeeR1gRkn0i4q2HVHzpmjFR3P2ceHT"))  // destination:MsgAddress
+	.storeAddress(Address.parse("UQDC6c8RLsP7cF4mCx4iHbO4h_HrRt_9jOlERMXhOmh4m2P3"))  // response_destination:MsgAddress
+	.storeUint(0, 1)                          // custom_payload:(Maybe ^Cell)
+	.storeCoins(toNano("0.05"))                 // forward_ton_amount:(VarUInteger 16) - if >0, will send notification message
+	.storeUint(0,1)                           // forward_payload:(Either Cell ^Cell)
+	.endCell();
 
-		// Uncomment the following message to send two messages in one transaction.
-		/*
-    {
-      // Note: Funds sent to this address will not be returned back to the sender.
-      address: 'UQAuz15H1ZHrZ_psVrAra7HealMIVeFq0wguqlmFno1f3B-m',
-      amount: toNano('0.01').toString(),
-    }
-    */
-
-	],
-};
+const myTransaction = {
+    validUntil: Math.floor(Date.now() / 1000) + 360,
+    messages: [
+        {
+            address: "EQAFbD90JMWnEWDqqd7utTyL0SXKooKMmJuMdGC9F1sMmxI4",
+            amount: toNano("0.05").toString(), // for commission fees, excess will be returned
+            payload: body.toBoc().toString("base64") // payload with jetton transfer body
+        }
+    ]
+}
 
 export function TxForm() {
-	const [tx, setTx] = useState(defaultTx);
-	const wallet = useTonWallet();
-	const [tonConnectUi] = useTonConnectUI();
+	const [tonConnectUI, setOptions] = useTonConnectUI();
 
-	const onChange = useCallback((value: object) => setTx((value as { updated_src: typeof defaultTx }).updated_src), []);
-
-	return (
-		<div className="send-tx-form">
-			<h3>Configure and send transaction</h3>
-			<ReactJson src={defaultTx} theme="ocean" onEdit={onChange} onAdd={onChange} onDelete={onChange} />
-			{wallet ? (
-				<button onClick={() => tonConnectUi.sendTransaction(tx)}>
-					Send transaction
-				</button>
-			) : (
-				<button onClick={() => tonConnectUi.openModal()}>Connect wallet to send the transaction</button>
-			)}
-		</div>
-	);
+    return (
+        <div>
+            <button onClick={() => tonConnectUI.sendTransaction(myTransaction)}>
+                Send transaction
+            </button>
+        </div>
+    );
 }
